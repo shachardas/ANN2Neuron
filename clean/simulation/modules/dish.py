@@ -25,7 +25,7 @@ class Dish():
         # Run simulation
         nest.Simulate(self.simLength)
 
-        # Define function getting activity from the recorder
+        # Getting activity from the recorder
         def getActivity(node):
             if node.get("model") == "spike_recorder":
                 nodeIds = nest.GetConnections(None, node).sources()
@@ -71,11 +71,11 @@ class Dish():
             })
         
         # return debugging information
-        events = []
-        if not self.quick:
-            for data in [getActivity(recorder) for recorder in self.massRecorders_list]:
-                events.append(data["events"]["times"])
-        return events
+        # events = []
+        # if not self.quick:
+        #     for data in [getActivity(recorder) for recorder in self.massRecorders_list]:
+        #         events.append(data["events"]["times"])
+        return results
         
     
     # add a spike recorder and a multimeter monitors to the node

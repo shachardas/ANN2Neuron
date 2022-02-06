@@ -13,11 +13,8 @@ import random
 import os.path
 import pickle
 from model_mnist import Net, criterion
+import config
 
-ROOT_DIR = "/home/shachar/nestDocker/ANN2Neuron/clean/"
-SIMULATION_DIR = ROOT_DIR + "simulation/"
-ANN_DIR = ROOT_DIR + "artificial/"
-TRAINED_MODELS_DIR = SIMULATION_DIR + "trained_models/"
 
 
 # Training settings
@@ -98,7 +95,7 @@ def test():
 
 # consistent sample of the dataset, to better evaluate how well the model behaves in sim
 def getConstantSample(dataSet):
-    SAMPLE_DATA = SIMULATION_DIR + "mnist.sample"
+    SAMPLE_DATA = config.SIMULATION_DIR + "mnist.sample"
     sampleData = None
     if os.path.isfile(SAMPLE_DATA):
         with open(SAMPLE_DATA, 'rb') as file:
@@ -140,15 +137,15 @@ def evaluateForSim(model, dataSet):
 
 def generateTestingNotebook():
     notebookContent = ""
-    with open(SIMULATION_DIR + "testing.template.ipynb",'r') as f:
+    with open(config.SIMULATION_DIR + "testing.template.ipynb",'r') as f:
         notebookContent = f.read()
 
-    with open(ANN_DIR + "model_mnist.py", 'r') as f:
+    with open(config.ANN_DIR + "model_mnist.py", 'r') as f:
         notebookContent = notebookContent.replace("#model#",f.read().replace("\\","\\\\").replace("\"","\\\"").replace("\t","\\t").replace("\n","\\n\",\n\t\""))
     
     notebookContent = notebookContent.replace("#name#", args.model_name)
 
-    with open(SIMULATION_DIR + args.model_name + ".sim.ipynb",'w') as f:
+    with open(config.SIMULATION_DIR + args.model_name + ".sim.ipynb",'w') as f:
         f.write(notebookContent)
     
 
@@ -163,12 +160,12 @@ if __name__ == "__main__":
         torch.cuda.manual_seed(args.seed)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-    sample = torch.utils.data.Subset(datasets.MNIST(ROOT_DIR+'data', train=True, download=True,
+    sample = torch.utils.data.Subset(datasets.MNIST(config.ROOT_DIR+'data', train=True, download=True,
                        transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])), list(range(600))*100)
-    fullData = datasets.MNIST(ROOT_DIR+'data', train=True, download=True,
+    fullData = datasets.MNIST(config.ROOT_DIR+'data', train=True, download=True,
                         transform=transforms.Compose([
                             transforms.ToTensor(),
                             transforms.Normalize((0.1307,), (0.3081,))
@@ -193,7 +190,7 @@ if __name__ == "__main__":
         if epoch%40==0:
             optimizer.param_groups[0]['lr']=optimizer.param_groups[0]['lr']*0.5
 
-        torch.save(model.state_dict(), TRAINED_MODELS_DIR + args.model_name + ".pt")
+        torch.save(model.state_dict(), config.TRAINED_MODELS_DIR + args.model_name + ".pt")
         
         evaluateForSim(model, dataSet)
         

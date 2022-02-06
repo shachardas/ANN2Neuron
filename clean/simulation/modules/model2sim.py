@@ -21,7 +21,17 @@ def SimfromModel(trainedModel):
             weights.append(torch.transpose(torch.cat((W1,W2),1),0,1))
 
     layers.append(nextLayer)
-    
+
+    # account for the positive layers
+    for i, (key, value) in enumerate(state.items()):
+        if key.split(".")[1] == "weight" and key.split(".")[0].startswith("fcp"):
+            layers[i] = int(layers[i]/2)
+            weights[i] = weights[i].narrow(0,0,int(weights[i].size()[0]/2))
+            if i > 0:
+                weights[i-1] = weights[i-1].narrow(1,0,int(weights[i-1].size()[1]/2))
+
+
+    # trim the input and output layers
     layers[0] = int(layers[0]/2)
     layers[-1] = int(layers[-1]/2)
     weights[0] = weights[0].narrow(0,0,int(weights[0].size()[0]/2))
@@ -108,3 +118,107 @@ def testSim(model, res, model_act, number,layer,targetInNextLayer):
     plt.hist(hist,bins=50)
     return (parse, int(sum))
 
+if __name__ == '__main__':
+    #tests
+
+    import torch
+    import torch.nn as nn
+    def Binarize(tensor, include_zero = False):
+        if include_zero:
+            return ((tensor+0.5).sign()+(tensor-0.5).sign())/2
+        else:
+            return tensor.sign()
+
+    class BinarizeLinear(nn.Linear):
+
+        def __init__(self, *kargs, **kwargs):
+            super(BinarizeLinear, self).__init__(*kargs, **kwargs)
+
+        def forward(self, input):
+            if input.size(1) != 784:
+                input.data=Binarize(input.data)
+            if not hasattr(self.weight,'org'):
+                self.weight.org=self.weight.data.clone()
+            self.weight.data=Binarize(self.weight.org)
+            out = nn.functional.linear(input, self.weight)
+            if not self.bias is None:
+                self.bias.org=self.bias.data.clone()
+                out += self.bias.view(1, -1).expand_as(out)
+            return out
+
+    class PositiveBinarizeLinear(nn.Linear):
+
+        def __init__(self, *kargs, **kwargs):
+            super(PositiveBinarizeLinear, self).__init__(*kargs, **kwargs)
+    
+        def forward(self, input):
+            zero = torch.zeros_like(input.data)
+            input.data = torch.where(input.data > 0, input.data, zero)
+            input.data=Binarize(input.data)
+            if not hasattr(self.weight,'org'):
+                self.weight.org=self.weight.data.clone()
+            self.weight.data=Binarize(self.weight.org)
+            out = nn.functional.linear(input, self.weight)
+            if not self.bias is None:
+                self.bias.org=self.bias.data.clone()
+                out += self.bias.view(1, -1).expand_as(out)
+
+            return out
+
+    class Predefined_policy(nn.Module):
+        def __init__(self):
+            super(Predefined_policy, self).__init__()
+            self.fc = BinarizeLinear(4, 2, bias = False)
+            self.fcp = PositiveBinarizeLinear(2, 1, bias = False)
+            self.fc.weight = nn.Parameter(torch.tensor([[1.0,0.0,-1.0,0],[0.0,1.0,0,-1.0]]))
+            self.fcp.weight = nn.Parameter(torch.tensor([[1.0,1.0]]))
+            
+
+            self.saved_log_probs = []
+            self.rewards = []
+
+        def parseInput(self, x):
+            theta, w = x[0][2:4]
+            res = torch.zeros([1,4])
+            res[0][0] = float(theta > 0)
+            res[0][1] = float(w > 0)
+            res[0][2] = float(abs(theta) < 0.03)
+            res[0][3] = float(abs(theta) >= 0.03)
+            return res
+
+        def forward(self, x):
+            x = self.parseInput(x)
+            x = self.fc(x)
+            action_scores = self.fcp(x)
+            return action_scores
+
+
+    def parseInput(x):
+        theta, w = x[2:4]
+        res = torch.zeros([4])
+        res[0] = float(theta > 0)
+        res[1] = float(w > 0)
+        res[2] = float(abs(theta) < 0.03)
+        res[3] = float(abs(theta) >= 0.03)
+        return res
+
+    model = Predefined_policy()
+    model.load_state_dict(torch.load("/home/shachar/nestDocker/ANN2Neuron/clean/simulation/trained_models/predefined-CartPole.pt",map_location=torch.device('cpu')))
+    net = SimfromModel(model)
+    res = net.stimulate([1,1,1,0], simLen = 30, verbosity=1)
+    print(len(res[0][0]["times"]))
+
+    import gym
+    env = gym.make('CartPole-v1')
+    state = env.reset()
+    frames = []
+    for t in range(1, 1000):  # Don't infinite loop while learning
+        net = SimfromModel(model)
+        print(state, parseInput(state))
+        res = net.stimulate(parseInput(state), simLen = 30, verbosity=1)
+        action = len(res[0][0]["times"])
+        state, reward, done, _ = env.step(action)
+        frames.append(env.render(mode="rgb_array"))
+        if done:
+            print("done!")
+            break

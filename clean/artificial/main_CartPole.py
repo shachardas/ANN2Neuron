@@ -13,6 +13,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
+import config
+
 
 parser = argparse.ArgumentParser(description='PyTorch REINFORCE example')
 parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
@@ -23,7 +25,7 @@ parser.add_argument('--render', action='store_true', default=False,
                     help='render the environment')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='interval between training status logs (default: 10)')
-parser.add_argument('--do-learn', action='store_true', default=True,
+parser.add_argument('--do-learn', action='store_true', default=False,
                     help='use a leaning model or a predefined configuration (default: False - predefined)')
 args = parser.parse_args()
 
@@ -127,10 +129,10 @@ predefined model:
 class Predefined_policy(nn.Module):
     def __init__(self):
         super(Predefined_policy, self).__init__()
-        self.affine1 = BinarizeLinear(3, 2, bias = False)
-        self.affine2 = PositiveBinarizeLinear(2, 1, bias = False)
-        self.affine1.weight = nn.Parameter(torch.tensor([[1.0,0.0,-1.0],[0.0,1.0,1.0]]))
-        self.affine2.weight = nn.Parameter(torch.tensor([[1.0,1.0]]))
+        self.fc = BinarizeLinear(4, 2, bias = False)
+        self.fcp = PositiveBinarizeLinear(2, 1, bias = False)
+        self.fc.weight = nn.Parameter(torch.tensor([[1.0,0.0,-1.0,0],[0.0,1.0,0,-1.0]]))
+        self.fcp.weight = nn.Parameter(torch.tensor([[1.0,1.0]]))
         
 
         self.saved_log_probs = []
@@ -138,16 +140,17 @@ class Predefined_policy(nn.Module):
 
     def parseInput(self, x):
         theta, w = x[0][2:4]
-        res = torch.zeros([1,3])
+        res = torch.zeros([1,4])
         res[0][0] = float(theta > 0)
         res[0][1] = float(w > 0)
         res[0][2] = float(abs(theta) < 0.03)
-        return res*2-1
+        res[0][3] = float(abs(theta) >= 0.03)
+        return res
 
     def forward(self, x):
         x = self.parseInput(x)
-        x = self.affine1(x)
-        action_scores = self.affine2(x)
+        x = self.fc(x)
+        action_scores = self.fcp(x)
         return action_scores
 
 predefined_policy = Predefined_policy()
@@ -195,6 +198,8 @@ def finish_episode():
 def main():
     print("started")
     running_reward = 10
+    if not args.do_learn:
+        torch.save(predefined_policy.state_dict(), config.TRAINED_MODELS_DIR + "predefined-CartPole" + ".pt")
     for i_episode in count(1):
         state, ep_reward = env.reset(), 0
         for t in range(1, 10000):  # Don't infinite loop while learning
