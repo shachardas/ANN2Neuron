@@ -12,7 +12,7 @@ from binarized_modules import  Binarize,HingeLoss
 import random
 import os.path
 import pickle
-from model import Net, criterion
+from model_mnist import Net, criterion
 
 ROOT_DIR = "/home/shachar/nestDocker/ANN2Neuron/clean/"
 SIMULATION_DIR = ROOT_DIR + "simulation/"
@@ -25,8 +25,8 @@ parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
 parser.add_argument('--batch-size', type=int, default=64*8, metavar='N',
                     help='input batch size for training (default: 256)')
 parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
-                    help='input batch size for testing (default: 1000)')
-parser.add_argument('--epochs', type=int, default=1000, metavar='N',
+                    help='input batch size for testing (default: 100)')
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
                     help='learning rate (default: 0.001)')
@@ -40,7 +40,7 @@ parser.add_argument('--gpu-id', default=1,
                     help='gpu id used in cuda.set_device()')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model-name', type=str, default="testDEBUG", metavar='N',
+parser.add_argument('--model-name', type=str, default="test-tiny9.3-bias", metavar='N',
                     help='how would you name your model')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -123,19 +123,19 @@ def evaluateForSim(model, dataSet):
     for i in range(10):
         if torch.count_nonzero(
             torch.greater(
-                model.test(torch.as_tensor(sampleData[i]).float().to(device))
+                model(torch.as_tensor(sampleData[i]).float().to(device))
                 ,0)
                 ) != 1:
             print(f"line {i} was a fluke")
             print(model(torch.as_tensor(sampleData[i]).float().to(device)))
-            print(model.test(torch.as_tensor(sampleData[i]).float().to(device)))
+            
             passed = False
             break
     if passed:
         print("bingo")
         for i in range(10):
             print(model(torch.as_tensor(sampleData[i]).float().to(device)))
-            print(model.test(torch.as_tensor(sampleData[i]).float().to(device)))
+            
         exit() # stop when the results are what we wanted
 
 def generateTestingNotebook():
@@ -143,7 +143,7 @@ def generateTestingNotebook():
     with open(SIMULATION_DIR + "testing.template.ipynb",'r') as f:
         notebookContent = f.read()
 
-    with open(ANN_DIR + "model.py", 'r') as f:
+    with open(ANN_DIR + "model_mnist.py", 'r') as f:
         notebookContent = notebookContent.replace("#model#",f.read().replace("\\","\\\\").replace("\"","\\\"").replace("\t","\\t").replace("\n","\\n\",\n\t\""))
     
     notebookContent = notebookContent.replace("#name#", args.model_name)

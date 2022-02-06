@@ -11,8 +11,8 @@ import numpy as np
 def Binarize(tensor, include_zero = True, minSig=3):
     if include_zero:
         P_std = 0.25
-        up_lim = torch.min(0 + P_std*tensor.std(), torch.ones_like(tensor)*minSig)
-        down_lim = torch.max(0 - P_std*tensor.std(), -1*torch.ones_like(tensor)*minSig)
+        up_lim = torch.max(0 + P_std*tensor.std(), torch.ones_like(tensor)*minSig)
+        down_lim = torch.min(0 - P_std*tensor.std(), -1*torch.ones_like(tensor)*minSig)
         up_v = (tensor>up_lim).float()
         down_v = (tensor<down_lim).float().mul(-1)
         return (up_v + down_v)
