@@ -1,6 +1,6 @@
 import pickle
 import torch
-from .dishNetwork import DishNetwork
+from . import DishNetwork
 import numpy as np
 import matplotlib.pyplot as plt
 import os

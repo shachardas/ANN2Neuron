@@ -127,7 +127,7 @@ class Dish():
         self.connect(
             nest.Create("spike_generator", len(weights), params={"spike_times": [1.0] }),
             nodes,
-            weights, isOneToOne=True)
+            torch.FloatTensor(weights), isOneToOne=True)
         return nodes
     
     # mutable node
@@ -146,11 +146,11 @@ class Dish():
         # set connection weight - 1 will induce a spike by its own
         if torch.is_tensor(weight): # multiple connections
             synSpec = {"weight": weight.mul(1200).tolist()}
-        elif weight: # single connection
-            synSpec = {"weight": weight * 1200}
-        else:
+        elif weight == None:
             synSpec = {}
-        
+        else: # single connection
+            synSpec = {"weight": weight * 1200}
+
         # set connection delay 
         synSpec.update({} if delay == None else {"delay": 23.0 * delay})
 

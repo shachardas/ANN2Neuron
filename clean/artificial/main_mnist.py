@@ -1,3 +1,4 @@
+#origin https://github.com/itayhubara/BinaryNet.pytorch/blob/master/main_mnist.py
 
 from __future__ import print_function
 import argparse
@@ -37,7 +38,9 @@ parser.add_argument('--gpu-id', default=1,
                     help='gpu id used in cuda.set_device()')
 parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
-parser.add_argument('--model-name', type=str, default="test-tiny9.3-bias", metavar='N',
+parser.add_argument('--overfit', action='store_true', default=False,
+                    help='(bool) use sampled dataset in order to overfit')
+parser.add_argument('--model-name', type=str, default="testtesttest", metavar='N',
                     help='how would you name your model')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -170,7 +173,7 @@ if __name__ == "__main__":
                             transforms.ToTensor(),
                             transforms.Normalize((0.1307,), (0.3081,))
                         ]))
-    dataSet = sample
+    dataSet = sample if args.overfit else fullData
     train_loader = torch.utils.data.DataLoader(
         dataSet,
         batch_size=args.batch_size, shuffle=True, **kwargs)
@@ -181,7 +184,7 @@ if __name__ == "__main__":
     model = Net()
     model.to(device)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
     
     print("*** training started ***")
     for epoch in range(1, args.epochs + 1):

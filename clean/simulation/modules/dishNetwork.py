@@ -1,5 +1,5 @@
 from re import I
-from .dish import Dish
+from modules.dish import Dish
 import torch
 import time
 
@@ -16,6 +16,7 @@ class DishNetwork():
         print(f"connecting {len(this)} neurons to {len(that)} neurons")
         #from tensor to lists
         t = time.process_time()
+        weights = torch.tensor(weights)
         self.dish.connect(this, that, weights.t(), delay)
         elapsed_time = time.process_time() - t
         print(f"this took {elapsed_time} seconds")
@@ -73,7 +74,7 @@ class DishNetwork():
     # stimulate the network
     # accepts a function as stimulation f(i,t)=1 iff the node i spikes at time t, f(i,t)=0 otherwise
     # accepts a 2D list where list[i][t]=1 iff the node i spikes at time t, list[i][t]=0 otherwise
-    def stimulate(self, stim = None, simLen = 1000, verbosity = 3):
+    def stimulate(self, stim = None, simLen = 1000, verbosity = 3, isSimple = True):
         self.dish.stimuli_list = []
         self.dish.simLength = simLen
         print("creating stimulation")
@@ -88,7 +89,17 @@ class DishNetwork():
             elif type(stim) is list:
                 self.dish.stimulateNode(neuron, stim[i])
         """
-        self.dish.SimpleStimulateNodes(self.inputLayer,torch.FloatTensor(stim))
+        if not stim:
+            for i, neuron in enumerate(self.inputLayer):
+                self.dish.stimulateNode(neuron)
+        elif isSimple:
+            self.dish.SimpleStimulateNodes(self.inputLayer,stim)
+        else:
+            for i, neuron in enumerate(self.inputLayer):
+                if callable(stim):
+                    self.dish.stimulateNode(neuron, lambda t: stim(i,t))
+                elif type(stim) is list:
+                    self.dish.stimulateNode(neuron, stim[i])
         print("starting to record")
         events = self.dish.record(verbosity)
         layeredEvents = []
