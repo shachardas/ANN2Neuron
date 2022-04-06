@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 
 class customLoss(nn.Module):
-    def __init__(self, p=0.5):
+    def __init__(self, p=0.1):
         super().__init__()
         self.p = p
         self.cost = nn.CrossEntropyLoss()
@@ -12,19 +12,20 @@ class customLoss(nn.Module):
     def forward(self, output, labels, scale_true=10, scale_wrong=-10):
         # scale_wrong = max(sum(output[0])/len(output[0]), 2) * scale
         # scale_true = scale_wrong * 10
-        tempOut = torch.where(output>0,output*scale_wrong,torch.zeros_like(output))
-        tempLabels = torch.ones_like(output) * scale_wrong
+        tempOut = torch.where(output>0,(output+1),torch.zeros_like(output))
+        #tempLabels = torch.ones_like(output) * scale_wrong
         for i in range(labels.size(0)):
             j = labels[i]
             #tempLabels[i,j] = scale_true 
-            tempLabels[i,j] = torch.max(torch.abs(torch.mean(output[i])), torch.abs(output[i,j]))*scale_true
+            tempOut[i,j] = 0#torch.max(torch.abs(torch.mean(output[i])), torch.abs(output[i,j]))*scale_true
         #output_softmax = nn.LogSoftmax()(output)
-        return self.p    * self.cost2(tempOut, tempLabels) \
+
+        return self.p    * torch.mean(tempOut) \
             + (1-self.p) * self.cost(output,labels)
 
 
-criterion = nn.CrossEntropyLoss()
-#criterion = customLoss()
+#criterion = nn.CrossEntropyLoss()
+criterion = customLoss()
 
 def Binarize(tensor, include_zero = False, minSig=3):
     if include_zero:
@@ -85,20 +86,45 @@ class BinarizeLinear(nn.Linear):
 
         return out
 
+# simplified batchnorm with no mean normalization and separate learnable parameters for positive and negatives
+class myBatchNorm1d(nn.BatchNorm1d):
+
+    def __init__(self, size):
+        super(myBatchNorm1d, self).__init__(size)
+        self.eps = 1e-5
+        self.l1 = nn.Parameter(torch.ones(size))
+        self.l2 = nn.Parameter(torch.ones(size))
+        self.running_var = torch.ones(size)
+        self.momentum = 0.1
+
+    def forward(self, input):
+        device = input.get_device()
+        if input.size()[0] != 1:
+            self.running_var = (1-self.momentum) * self.running_var + self.momentum * torch.var(input, keepdim=True, dim=0)
+            bottom = torch.sqrt(torch.var(input, keepdim=True, dim=0) + self.eps)
+        else:
+            bottom = torch.sqrt(self.running_var + self.eps)
+
+        top = input * torch.sigmoid(10 * input) * self.l1 + input * torch.sigmoid(-10 * input) * self.l2
+        
+        out = top/bottom
+
+        return out
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.infl_ratio=3
-        self.fc1 = BinarizeLinear(784, 1024*self.infl_ratio)
+        self.fc1 = BinarizeLinear(784, 1024*self.infl_ratio, bias=False)
         self.htanh1 = nn.Hardtanh()
-        self.bn1 = nn.BatchNorm1d(1024*self.infl_ratio)
-        self.fc2 = BinarizeLinear(1024*self.infl_ratio, 1024*self.infl_ratio)
+        self.bn1 = myBatchNorm1d(1024*self.infl_ratio)
+        self.fc2 = BinarizeLinear(1024*self.infl_ratio, 1024*self.infl_ratio, bias=False)
         self.htanh2 = nn.Hardtanh()
-        self.bn2 = nn.BatchNorm1d(1024*self.infl_ratio)
-        self.fc3 = BinarizeLinear(1024*self.infl_ratio, 1024*self.infl_ratio)
+        self.bn2 = myBatchNorm1d(1024*self.infl_ratio)
+        self.fc3 = BinarizeLinear(1024*self.infl_ratio, 1024*self.infl_ratio, bias=False)
         self.htanh3 = nn.Hardtanh()
-        self.bn3 = nn.BatchNorm1d(1024*self.infl_ratio)
-        self.fc4 = nn.Linear(1024*self.infl_ratio, 10)
+        self.bn3 = myBatchNorm1d(1024*self.infl_ratio)
+        self.fc4 = nn.Linear(1024*self.infl_ratio, 10, bias=False)
         self.logsoftmax=nn.LogSoftmax()
         self.drop=nn.Dropout(0.5)
 
@@ -110,9 +136,9 @@ class Net(nn.Module):
         x = self.fc2(x)
         x = self.bn2(x)
         x = self.htanh2(x)
-        x = self.fc3(x)
+        x = self.fc3(x) 
         x = self.drop(x)
         x = self.bn3(x)
         x = self.htanh3(x)
         x = self.fc4(x)
-        return self.logsoftmax(x)
+        return x#self.logsoftmax(x)

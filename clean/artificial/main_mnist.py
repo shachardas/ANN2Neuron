@@ -26,7 +26,7 @@ parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                     help='input batch size for testing (default: 100)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
-parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
+parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                     help='learning rate (default: 0.001)')
 parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                     help='SGD momentum (default: 0.5)')
@@ -40,7 +40,7 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--overfit', action='store_true', default=False,
                     help='(bool) use sampled dataset in order to overfit')
-parser.add_argument('--model-name', type=str, default="testtesttest", metavar='N',
+parser.add_argument('--model-name', type=str, default="DNN_customloss", metavar='N',
                     help='how would you name your model')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -191,22 +191,10 @@ if __name__ == "__main__":
         train(epoch)
         test()
         if epoch%40==0:
-            optimizer.param_groups[0]['lr']=optimizer.param_groups[0]['lr']*0.5
+            optimizer.param_groups[0]['lr']=optimizer.param_groups[0]['lr']*0.1
 
         torch.save(model.state_dict(), config.TRAINED_MODELS_DIR + args.model_name + ".pt")
         
         evaluateForSim(model, dataSet)
-        
-'''
-    criterion = customLoss(10,10)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    for epoch in range(1, args.epochs*100 + 1):
-        train(epoch)
-        test()
-        if epoch%40==0:
-            optimizer.param_groups[0]['lr']=optimizer.param_groups[0]['lr']*0.1
 
-        torch.save(model.state_dict(), "mnist_trained_with_test.pt")
-
-'''
