@@ -3,25 +3,22 @@ import torch.nn as nn
 import numpy as np
 
 class customLoss(nn.Module):
-    def __init__(self, p=0.1):
+    def __init__(self, p=0.5):
         super().__init__()
         self.p = p
         self.cost = nn.CrossEntropyLoss()
-        self.cost2 = nn.L1Loss()
+        self.activation = nn.LogSoftmax()
 
-    def forward(self, output, labels, scale_true=10, scale_wrong=-10):
-        # scale_wrong = max(sum(output[0])/len(output[0]), 2) * scale
-        # scale_true = scale_wrong * 10
-        tempOut = torch.where(output>0,(output+1),torch.zeros_like(output))
-        #tempLabels = torch.ones_like(output) * scale_wrong
+    def forward(self, output, labels):
+        tempOut = torch.clone(output)
+        
         for i in range(labels.size(0)):
-            j = labels[i]
-            #tempLabels[i,j] = scale_true 
-            tempOut[i,j] = 0#torch.max(torch.abs(torch.mean(output[i])), torch.abs(output[i,j]))*scale_true
-        #output_softmax = nn.LogSoftmax()(output)
+            tempOut[i,labels[i]] = -1 * tempOut[i,labels[i]]
+
+        tempOut = torch.where(tempOut>-1,tempOut+2,torch.zeros_like(tempOut))
 
         return self.p    * torch.mean(tempOut) \
-            + (1-self.p) * self.cost(output,labels)
+            + (1-self.p) * self.cost(self.activation(output),labels)
 
 
 #criterion = nn.CrossEntropyLoss()
@@ -43,7 +40,7 @@ def Binarize(tensor, include_zero = False, minSig=3):
             return ((tensor+0.5).sign()+(tensor-0.5).sign())/2
         else:
             return tensor.sign()"""
-
+'''
 class PositiveBinarizeLinear(nn.Linear):
 
         def __init__(self, *kargs, **kwargs):
@@ -66,6 +63,9 @@ class PositiveBinarizeLinear(nn.Linear):
                 out += self.bias.view(1, -1).expand_as(out)
 
             return out
+'''
+
+
 
 class BinarizeLinear(nn.Linear):
 
@@ -87,10 +87,10 @@ class BinarizeLinear(nn.Linear):
         return out
 
 # simplified batchnorm with no mean normalization and separate learnable parameters for positive and negatives
-class myBatchNorm1d(nn.BatchNorm1d):
+class SignSensitiveBatchNorm1d(nn.BatchNorm1d):
 
     def __init__(self, size):
-        super(myBatchNorm1d, self).__init__(size)
+        super(SignSensitiveBatchNorm1d, self).__init__(size)
         self.eps = 1e-5
         self.l1 = nn.Parameter(torch.ones(size))
         self.l2 = nn.Parameter(torch.ones(size))
@@ -117,14 +117,14 @@ class Net(nn.Module):
         self.infl_ratio=3
         self.fc1 = BinarizeLinear(784, 1024*self.infl_ratio, bias=False)
         self.htanh1 = nn.Hardtanh()
-        self.bn1 = myBatchNorm1d(1024*self.infl_ratio)
+        self.bn1 = SignSensitiveBatchNorm1d(1024*self.infl_ratio)
         self.fc2 = BinarizeLinear(1024*self.infl_ratio, 1024*self.infl_ratio, bias=False)
         self.htanh2 = nn.Hardtanh()
-        self.bn2 = myBatchNorm1d(1024*self.infl_ratio)
+        self.bn2 = SignSensitiveBatchNorm1d(1024*self.infl_ratio)
         self.fc3 = BinarizeLinear(1024*self.infl_ratio, 1024*self.infl_ratio, bias=False)
         self.htanh3 = nn.Hardtanh()
-        self.bn3 = myBatchNorm1d(1024*self.infl_ratio)
-        self.fc4 = nn.Linear(1024*self.infl_ratio, 10, bias=False)
+        self.bn3 = SignSensitiveBatchNorm1d(1024*self.infl_ratio)
+        self.fc4 = BinarizeLinear(1024*self.infl_ratio, 10, bias=False)
         self.logsoftmax=nn.LogSoftmax()
         self.drop=nn.Dropout(0.5)
 

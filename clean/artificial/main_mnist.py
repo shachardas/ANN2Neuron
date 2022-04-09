@@ -29,7 +29,7 @@ parser.add_argument('--epochs', type=int, default=100, metavar='N',
 parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                     help='learning rate (default: 0.001)')
 parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
-                    help='SGD momentum (default: 0.5)')
+                    help='momentum (default: 0.5)')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -40,8 +40,10 @@ parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--overfit', action='store_true', default=False,
                     help='(bool) use sampled dataset in order to overfit')
-parser.add_argument('--model-name', type=str, default="DNN_customloss", metavar='N',
-                    help='how would you name your model')
+parser.add_argument('--halt-on-find', action='store_true', default=False,
+                    help='stop training the model when the constant sample is currectly predicted')
+parser.add_argument('--model-name', type=str, default="test", metavar='N',
+                    help='how would you name your model (will be used to generate the notebook)')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -79,6 +81,7 @@ def test():
     model.eval()
     test_loss = 0
     correct = 0
+    signed_correct = 0
     with torch.no_grad():
         for data, target in test_loader:
             if args.cuda:
@@ -87,13 +90,19 @@ def test():
             Parallized_model = torch.nn.DataParallel(model)
             output = Parallized_model((data>0).float())
             test_loss += criterion(output, target).item() # sum up batch loss
-            pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+            pred = output.data.max(1, keepdim=True)[1] # get the index of the max output
             correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
+            indicator_out = torch.where(output.data>0,torch.ones_like(output.data),torch.zeros_like(output.data))
+            signed_pred = indicator_out.sum(1, keepdim=True)
+            signed_correct += (pred.eq(target.data.view_as(pred)).logical_and(signed_pred.eq(torch.ones_like(signed_pred)))).cpu().sum() # make sure the sign is currect
+
     test_loss /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%), Signed Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+        100. * correct / len(test_loader.dataset),
+        signed_correct, len(test_loader.dataset),
+        100. * signed_correct / len(test_loader.dataset)))
 
 
 # consistent sample of the dataset, to better evaluate how well the model behaves in sim
@@ -126,17 +135,19 @@ def evaluateForSim(model, dataSet):
                 model(torch.as_tensor(sampleData[i]).float().to(device))
                 ,0)
                 ) != 1:
-            print(f"line {i} was a fluke")
+            print(f"For label {i} there wasn't just one positive logit")
             print(model(torch.as_tensor(sampleData[i]).float().to(device)))
             
             passed = False
             break
     if passed:
-        print("bingo")
-        for i in range(10):
-            print(model(torch.as_tensor(sampleData[i]).float().to(device)))
+        print("All the sample examples were currectly classified")
+        
+        if args.halt_on_find:
+            for i in range(10):
+                print(f"for label {i} the output was \n{model(torch.as_tensor(sampleData[i]).float().to(device))}")
             
-        exit() # stop when the results are what we wanted
+            exit() # stop when the results are what we wanted
 
 def generateTestingNotebook():
     notebookContent = ""
