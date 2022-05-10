@@ -1,3 +1,4 @@
+
 import pickle
 import torch
 from . import DishNetwork
@@ -11,6 +12,7 @@ def SimfromModel(trainedModel):
     layers = []
     state = trainedModel.state_dict()
     nextLayer = 0
+    print(state.items())
     for key, value in state.items():
         #print("parsing layer:",key, value.size())
         if key.split(".")[1] == "weight" and key.split(".")[0].startswith("fc"):
@@ -49,6 +51,14 @@ def samples2stim(sample):
                 arr.append(0)
     return arr
 
+def samples2stimRNN(sample):
+    delay = 30
+    for i, row in enumerate(sample):
+        for j, cell in enumerate(row):
+            if cell == 1:
+                sample[i][j] = j*delay
+    return sample
+
 # visualize the network input and output (as MNIST)
 def testMNIST(model):
     events = {}
@@ -71,12 +81,30 @@ def testMNIST(model):
         net = SimfromModel(model)      
         plt.figure(figsize=(20,5))
         plt.title("simulating for "+str(label))
-        res = net.stimulate(samples2stim(cleanSamples[label]), simLen = 100, verbosity=1)
+        res = net.stimulate(samples2stimRNN(cleanSamples[label]), simLen = 100, verbosity=1)
         events.update({label:res})
         print("simulation result:")
         plt.show()
         #model_act.update({label:model.activity})
         model_act.update({label:None})
+    return (events, model_act)
+
+# visualize the network input and output (as RNN)
+def testRNN(model, input):
+    events = {}
+    model_act = {}
+    for i, sample in enumerate(input):  
+        
+        print("RNN result:", model(sample))
+
+        net = SimfromModel(model)      
+        plt.figure(figsize=(20,5))
+        plt.title("simulating for "+str(i))
+        res = net.stimulate(samples2stimRNN(sample), simLen = 100, verbosity=1)
+        events.update({i:res})
+        print("simulation result:")
+        plt.show()
+        model_act.update({i:None})
     return (events, model_act)
 
 # investigate the activity of the simulated network activity on the sample
@@ -118,9 +146,7 @@ def testSim(model, res, model_act, number,layer,targetInNextLayer):
     plt.hist(hist,bins=50)
     return (parse, int(sum))
 
-if __name__ == '__main__':
-    #tests
-
+def cartpole_sim():
     import torch
     import torch.nn as nn
     def Binarize(tensor, include_zero = False):
@@ -222,3 +248,4 @@ if __name__ == '__main__':
         if done:
             print("done!")
             break
+
